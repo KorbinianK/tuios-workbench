@@ -1,0 +1,909 @@
+<title>TUIOS Workbench</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Condensed:wght@500;600&family=IBM+Plex+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;700&display=swap">
+<style>
+/* Layout: a workbench — controls on the left, a live cell-accurate TUIOS screen pinned on the right; stacks on phones. */
+:root {
+  --bg: #eceff3; --panel: #ffffff; --ink: #151a22; --ink-2: #505a6a; --line: #d3d8e0;
+  --chip: #e2e6ed; --accent: #2b4bd1; --accent-ink: #ffffff; --ok: #17794a; --warn: #a15c00;
+  --f-display: "IBM Plex Sans Condensed", "Arial Narrow", system-ui, sans-serif;
+  --f-body: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --f-mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #0e1014; --panel: #161920; --ink: #e5e8ee; --ink-2: #98a1b0; --line: #2a2f39;
+  --chip: #20242d; --accent: #8da1ff; --accent-ink: #0e1014; --ok: #5ccf8b; --warn: #f0b35a; color-scheme: dark } }
+:root[data-theme="dark"] {
+  --bg: #0e1014; --panel: #161920; --ink: #e5e8ee; --ink-2: #98a1b0; --line: #2a2f39;
+  --chip: #20242d; --accent: #8da1ff; --accent-ink: #0e1014; --ok: #5ccf8b; --warn: #f0b35a; color-scheme: dark }
+
+* { box-sizing: border-box }
+html, body { height: 100% }
+body { background: var(--bg); color: var(--ink); font: 14px/1.5 var(--f-body); }
+.wrap { padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 16px 40px; max-width: 1600px; margin: 0 auto; }
+header.top { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 16px; margin-bottom: 14px }
+header.top h1 { font: 600 22px/1.1 var(--f-display); letter-spacing: .01em; margin: 0; text-wrap: balance }
+header.top h1 span { color: var(--ink-2); font-weight: 500 }
+header.top p { margin: 0; color: var(--ink-2); font-size: 13px }
+.wip { font: 600 11px var(--f-mono); font-style: normal; letter-spacing: .06em; color: var(--warn); border: 1px solid var(--warn); border-radius: 4px; padding: 1px 6px; vertical-align: middle }
+.changed-pill { margin-left: auto; font: 500 12px var(--f-mono); padding: 3px 10px; border-radius: 99px; background: var(--chip); color: var(--ink-2) }
+.changed-pill b { color: var(--accent) }
+
+.steps { display: flex; gap: 4px; overflow-x: auto; padding-bottom: 2px; margin-bottom: 14px; scrollbar-width: thin }
+.steps button { flex: none; font: 500 13px var(--f-body); border: 1px solid var(--line); background: var(--panel); color: var(--ink-2); padding: 6px 12px; border-radius: 6px; cursor: pointer; display: flex; gap: 7px; align-items: center }
+.steps button i { font: 600 11px var(--f-mono); font-style: normal; color: var(--ink-2); opacity: .7 }
+.steps button[aria-current="step"] { background: var(--ink); color: var(--bg); border-color: var(--ink) }
+.steps button[aria-current="step"] i { color: var(--bg) }
+.steps button .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--accent) }
+
+.bench { display: grid; grid-template-columns: minmax(340px, 440px) minmax(0, 1fr); gap: 16px; align-items: start }
+@media (max-width: 900px) { .bench { grid-template-columns: minmax(0, 1fr) } .stage { order: -1; position: static !important } }
+
+.controls { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 16px 16px 20px; min-width: 0 }
+.controls h2 { font: 600 18px/1.2 var(--f-display); margin: 0 0 4px }
+.controls .lede { color: var(--ink-2); margin: 0 0 14px; font-size: 13px }
+.group-h { font: 600 11px var(--f-mono); text-transform: uppercase; letter-spacing: .08em; color: var(--ink-2); margin: 18px 0 6px; padding-top: 12px; border-top: 1px solid var(--line) }
+.group-h:first-of-type { border-top: 0; padding-top: 0; margin-top: 4px }
+.group-h small { text-transform: none; letter-spacing: 0; font: 400 11px var(--f-body); margin-left: 6px }
+.row { display: grid; grid-template-columns: minmax(0, 1fr); gap: 5px; padding: 8px 0 }
+.row .lab { display: flex; align-items: center; gap: 8px; font-weight: 500 }
+.row .lab code { font: 400 11px var(--f-mono); color: var(--ink-2); margin-left: auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0 }
+.row .desc { color: var(--ink-2); font-size: 12px; line-height: 1.4 }
+.row.mod .lab::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--accent); flex: none }
+.reset { border: 0; background: none; color: var(--accent); font: 500 11px var(--f-body); cursor: pointer; padding: 0 }
+.seg { display: flex; flex-wrap: wrap; gap: 4px }
+.seg button { font: 500 12px var(--f-mono); border: 1px solid var(--line); background: var(--bg); color: var(--ink); padding: 4px 9px; border-radius: 5px; cursor: pointer }
+.seg button[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); border-color: var(--accent) }
+.seg button .smp { opacity: .8; margin-right: 5px }
+.sw { display: inline-flex; align-items: center; gap: 8px; cursor: pointer; font-size: 13px; color: var(--ink-2) }
+.sw input { appearance: none; width: 34px; height: 20px; border-radius: 99px; background: var(--chip); border: 1px solid var(--line); position: relative; cursor: pointer; margin: 0; transition: background .15s }
+.sw input::after { content: ""; position: absolute; top: 2px; left: 2px; width: 14px; height: 14px; border-radius: 50%; background: var(--ink-2); transition: transform .15s }
+.sw input:checked { background: var(--accent); border-color: var(--accent) }
+.sw input:checked::after { transform: translateX(14px); background: var(--accent-ink) }
+.rng { display: flex; align-items: center; gap: 10px }
+.rng input[type=range] { flex: 1; accent-color: var(--accent); min-width: 0 }
+.rng output { font: 500 12px var(--f-mono); min-width: 4ch; text-align: right; font-variant-numeric: tabular-nums }
+input[type=text], input[type=search], select, textarea { font: 13px var(--f-mono); background: var(--bg); color: var(--ink); border: 1px solid var(--line); border-radius: 6px; padding: 6px 8px; width: 100%; min-width: 0 }
+textarea { min-height: 110px; resize: vertical }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px }
+.sugg { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 2px }
+.sugg button { font: 11px var(--f-mono); border: 1px dashed var(--line); background: none; color: var(--ink-2); padding: 2px 7px; border-radius: 4px; cursor: pointer }
+
+.themes { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 8px }
+.themes button { border: 1px solid var(--line); border-radius: 7px; padding: 0; overflow: hidden; cursor: pointer; text-align: left; background: var(--panel); color: var(--ink) }
+.themes button[aria-pressed="true"] { outline: 2px solid var(--accent); outline-offset: 1px }
+.themes .tprev { padding: 8px 8px 6px; font: 11px/1.35 var(--f-mono) }
+.themes .tbar { display: flex; height: 6px; margin-top: 6px; border-radius: 2px; overflow: hidden }
+.themes .tbar span { flex: 1 }
+.themes .tname { font: 500 12px var(--f-body); padding: 5px 8px; border-top: 1px solid var(--line); display: flex; justify-content: space-between; gap: 4px }
+.themes .tname small { color: var(--ink-2); font-size: 10px }
+
+.lister { display: grid; gap: 4px }
+.lister .item { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; align-items: center; padding: 5px 8px; border: 1px solid var(--line); border-radius: 6px; background: var(--bg) }
+.lister .item.off { opacity: .55 }
+.lister .item .nm { font: 500 12px var(--f-mono); display: flex; gap: 8px; align-items: center; min-width: 0 }
+.lister .ctl { display: flex; gap: 4px; align-items: center }
+.lister .ctl button { font: 11px var(--f-mono); border: 1px solid var(--line); background: var(--panel); color: var(--ink); border-radius: 4px; padding: 2px 7px; cursor: pointer }
+.lister .ctl button[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); border-color: var(--accent) }
+.lister .ctl input { width: 52px; padding: 2px 5px; font-size: 11px }
+
+.presets { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px }
+.presets button { text-align: left; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); color: var(--ink); padding: 10px; cursor: pointer; font: 13px var(--f-body) }
+.presets button b { display: block; font: 600 14px var(--f-display) }
+.presets button kbd { font: 11px var(--f-mono); background: var(--chip); border-radius: 3px; padding: 1px 5px }
+.presets button small { display: block; color: var(--ink-2); font-size: 11.5px; margin-top: 4px; line-height: 1.35 }
+.presets button[aria-pressed="true"] { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent) }
+.keys { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 3px 12px; font-size: 12.5px; margin-top: 4px }
+.keys kbd { font: 11.5px var(--f-mono); white-space: nowrap; color: var(--accent) }
+
+.stage { position: sticky; top: calc(env(safe-area-inset-top, 0px) + 12px); min-width: 0; display: grid; gap: 8px }
+.screen-bar { display: flex; flex-wrap: wrap; gap: 6px 12px; align-items: center; font: 12px var(--f-mono); color: var(--ink-2) }
+.screen-bar .seg button { padding: 2px 8px; font-size: 11px }
+.screen-bar .sp { margin-left: auto }
+.screen { border-radius: 10px; overflow: hidden; border: 1px solid var(--line); box-shadow: 0 1px 0 var(--line), 0 18px 40px -24px rgba(0,0,0,.35) }
+.grid { font-family: var(--f-mono); white-space: pre; font-size: 10px; line-height: 1.2; font-variant-ligatures: none; user-select: none }
+.grid .r { height: 1.2em; overflow: hidden }
+.grid .cap { display: inline-block; width: 1ch; height: 1.2em; vertical-align: top }
+.grid .cap i { display: block; height: 100% }
+.grid .cap.l i { border-radius: 99em 0 0 99em; margin-left: .15ch }
+.grid .cap.r i { border-radius: 0 99em 99em 0; margin-right: .15ch }
+.note { font-size: 12px; color: var(--ink-2); margin: 0 }
+
+.out-tabs { display: flex; gap: 4px; margin: 6px 0 8px; flex-wrap: wrap }
+.out-tabs button { font: 500 12px var(--f-body); border: 1px solid var(--line); background: var(--bg); color: var(--ink-2); padding: 5px 10px; border-radius: 5px; cursor: pointer }
+.out-tabs button[aria-pressed="true"] { background: var(--ink); color: var(--bg); border-color: var(--ink) }
+pre.code { font: 12px/1.5 var(--f-mono); background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 12px; overflow: auto; max-height: 460px; margin: 0; white-space: pre }
+.actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; align-items: center }
+.btn { font: 600 13px var(--f-body); border: 1px solid var(--accent); background: var(--accent); color: var(--accent-ink); padding: 7px 14px; border-radius: 6px; cursor: pointer }
+.btn.ghost { background: none; color: var(--accent) }
+.toast { font-size: 12px; color: var(--ok) }
+.nav { display: flex; justify-content: space-between; gap: 8px; margin-top: 18px; padding-top: 14px; border-top: 1px solid var(--line) }
+.all-filter { display: flex; gap: 6px; flex-wrap: wrap; margin: 8px 0 4px }
+.all-filter button { font: 11px var(--f-mono); border: 1px solid var(--line); background: var(--bg); color: var(--ink-2); padding: 2px 8px; border-radius: 99px; cursor: pointer }
+.all-filter button[aria-pressed="true"] { background: var(--ink); color: var(--bg) }
+.check { display: flex; gap: 8px; align-items: flex-start; font-size: 13px; margin-top: 10px }
+.check input { margin-top: 3px; accent-color: var(--accent) }
+details summary { cursor: pointer; font-weight: 500; margin-top: 14px }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important } }
+</style>
+
+<div class="wrap">
+  <header class="top">
+    <h1>TUIOS Workbench <span>for tuios 0.11</span> <em class="wip">WIP</em></h1>
+    <p>Click settings together, watch the screen change, take the config to Claude.</p>
+    <span class="changed-pill" id="changedPill"></span>
+  </header>
+  <nav class="steps" id="steps" aria-label="Wizard steps"></nav>
+  <div class="bench">
+    <section class="controls" id="controls" aria-live="polite"></section>
+    <aside class="stage">
+      <div class="screen-bar">
+        <span>panes</span>
+        <div class="seg" id="paneSeg"></div>
+        <span>mode</span>
+        <div class="seg" id="modeSeg"></div>
+        <span class="sp" id="dims"></span>
+      </div>
+      <div class="screen" id="screen"><div class="grid" id="grid"></div></div>
+      <p class="note">This is a mock-up of the real screen. Borders, layout, dock, rail and colors follow your settings. TUIOS's own Nerd Font icons appear here as plain symbols.</p>
+    </aside>
+  </div>
+</div>
+
+<script id="opts" type="application/json">__OPTS__</script>
+<script id="themes" type="application/json">__THEMES__</script>
+<script>
+(() => {
+// ---------- schema ----------
+const RAW = JSON.parse(document.getElementById('opts').textContent);
+const SCHEMA = {};
+for (const [path, type, def, accepted, min, max, desc] of RAW) {
+  let d = def;
+  if (type === 'bool') d = def === 'true';
+  else if (type === 'int') d = Number(def);
+  SCHEMA[path] = { path, type, def: d, accepted, min, max, desc };
+}
+// Not scalar options (tables and lists), documented in KEYBINDINGS.md and CONFIGURATION.md
+const DOCK_ITEMS = ['mode','workspaces','trail','tape','windows','transfers','notifications','copy-help','cpu','ram','clock','session-controls'];
+const EXTRA = {
+  'keybindings.preset': { type: 'string', def: 'tuios', accepted: ['tuios','tmux','screen','zellij'], desc: 'Keys of another multiplexer after the leader' },
+  'keybindings.leader_key': { type: 'string', def: '', desc: 'The leader key. Empty uses the preset\'s leader' },
+  'keybindings.leader_twice': { type: 'string', def: 'send', accepted: ['send','last_workspace'], desc: 'What the leader pressed two times does' },
+  'dock.left': { type: 'list', def: ['mode','workspaces','trail','tape'] },
+  'dock.center': { type: 'list', def: ['windows'] },
+  'dock.right': { type: 'list', def: ['transfers','notifications','copy-help','cpu','ram','clock','session-controls'] },
+};
+for (const k in EXTRA) SCHEMA[k] = { path: k, ...EXTRA[k] };
+SCHEMA['appearance.sidebar.width'].min = 16; SCHEMA['appearance.sidebar.width'].max = 48;
+SCHEMA['appearance.zoom_max_width'].min = 0; SCHEMA['appearance.zoom_max_width'].max = 300;
+
+const THEMES = {};
+for (const t of JSON.parse(document.getElementById('themes').textContent)) {
+  const k = ['id','name','dark','bg','fg','selection_bg','black','red','green','yellow','blue','purple','cyan','white','bright_black','bright_red','bright_green','bright_yellow','bright_blue','bright_purple','bright_cyan','bright_white'];
+  const o = {}; k.forEach((n, i) => o[n] = t[i]); o.name = o.name || o.id.replace(/_/g, ' '); THEMES[o.id] = o;
+}
+const TERMINAL = { id: '', name: 'Terminal colors', dark: true, bg: '#16181d', fg: '#d6d9df', selection_bg: '#33373f',
+  black: '#1e2127', red: '#e06c75', green: '#98c379', yellow: '#e5c07b', blue: '#61afef', purple: '#c678dd', cyan: '#56b6c2', white: '#abb2bf',
+  bright_black: '#5c6370', bright_red: '#ef7a83', bright_green: '#a9d18a', bright_yellow: '#f0cc8c', bright_blue: '#72bcff', bright_purple: '#d788ee', bright_cyan: '#67c5d3', bright_white: '#ffffff' };
+const THEME_ORDER = ['catppuccin_mocha','tokyonight','dracula','gruvbox_dark','nord','rose_pine','kanagawa','one_dark','catppuccin_latte','rose_pine_dawn','ayu_light'].filter(k => THEMES[k]);
+
+// ---------- state ----------
+const LS = 'tuios-workbench-v1';
+let S = {}, P = { panes: 3, mode: 'window' }, step = 'look';
+try { const j = JSON.parse(localStorage.getItem(LS) || '{}'); S = j.S || {}; P = { ...P, ...(j.P || {}) }; step = j.step || step; } catch (e) {}
+const save = () => { try { localStorage.setItem(LS, JSON.stringify({ S, P, step })); } catch (e) {} };
+const get = p => (p in S ? S[p] : SCHEMA[p].def);
+const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+const set = (p, v) => { if (same(v, SCHEMA[p].def)) delete S[p]; else S[p] = v; save(); refresh(); };
+const changed = () => Object.keys(S).filter(k => SCHEMA[k]);
+
+// ---------- colors ----------
+const hx = h => { h = h.replace('#', ''); if (h.length === 3) h = h.split('').map(c => c + c).join(''); return [0, 2, 4].map(i => parseInt(h.substr(i, 2), 16)); };
+const toHex = a => '#' + a.map(v => Math.max(0, Math.min(255, Math.round(v))).toString(16).padStart(2, '0')).join('');
+const mix = (a, b, t) => { const A = hx(a), B = hx(b); return toHex(A.map((v, i) => v + (B[i] - v) * t)); };
+const ANSI = ['black','red','green','yellow','blue','purple','cyan','white','bright_black','bright_red','bright_green','bright_yellow','bright_blue','bright_purple','bright_cyan','bright_white'];
+function theme() { const t = get('appearance.theme'); return THEMES[t] || TERMINAL; }
+function roles(T) {
+  return { accent: T.bright_blue, accent_bright: T.bright_cyan, success: T.bright_green, warning: T.yellow, error: T.red, info: T.blue,
+    muted: T.dark ? mix(T.bright_black, T.bg, .15) : mix(T.bright_black, T.bg, .3),
+    surface: T.dark ? mix(T.bg, '#ffffff', .07) : mix(T.bg, '#000000', .06),
+    panel: T.dark ? mix(T.bg, '#ffffff', .035) : mix(T.bg, '#000000', .03) };
+}
+function color(str, T, R) {
+  if (str == null) return null; str = String(str).trim().toLowerCase(); if (!str) return null;
+  if (/^#?[0-9a-f]{6}$/.test(str) || /^#[0-9a-f]{3}$/.test(str)) return str[0] === '#' ? str : '#' + str;
+  const slot = str.replace('magenta', 'purple');
+  if (T[slot] && ANSI.includes(slot)) return T[slot];
+  if (slot === 'fg' || slot === 'bg') return T[slot];
+  if (R[str]) return R[str];
+  if (/^\d+$/.test(str) && +str < 16) return T[ANSI[+str]];
+  return null;
+}
+
+// ---------- the cell grid ----------
+const W = 112, H = 34;
+let G = [];
+function initGrid(bg, fg) { G = []; for (let y = 0; y < H; y++) { const r = []; for (let x = 0; x < W; x++) r.push({ c: ' ', fg, bg, b: 0, u: 0, cap: '', under: bg }); G.push(r); } }
+function inClip(x, y, c) { return !c || (x >= c.x && x < c.x + c.w && y >= c.y && y < c.y + c.h); }
+function put(x, y, ch, fg, bg, o, clip) {
+  if (x < 0 || y < 0 || x >= W || y >= H || !inClip(x, y, clip)) return;
+  const c = G[y][x]; const prev = c.bg;
+  c.c = ch; if (fg) c.fg = fg; if (bg) c.bg = bg;
+  c.b = o && o.b ? 1 : 0; c.u = o && o.u ? 1 : 0; c.cap = (o && o.cap) || ''; c.under = c.cap ? prev : c.bg;
+}
+function text(x, y, s, fg, bg, o, clip) { const a = [...s]; a.forEach((ch, i) => put(x + i, y, ch, fg, bg, o, clip)); return a.length; }
+function fill(x, y, w, h, bg, clip) { for (let j = 0; j < h; j++) for (let i = 0; i < w; i++) put(x + i, y + j, ' ', null, bg, null, clip); }
+function pill(x, y, s, fg, bg, caps, o, clip) {
+  if (caps) { put(x, y, ' ', null, bg, { cap: 'l' }, clip); const n = text(x + 1, y, s, fg, bg, o, clip); put(x + 1 + n, y, ' ', null, bg, { cap: 'r' }, clip); return n + 2; }
+  return text(x, y, ' ' + s + ' ', fg, bg, o, clip);
+}
+const plen = s => [...s].length + 2;
+const esc = s => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+function gridHTML() {
+  let out = '';
+  for (const row of G) {
+    out += '<div class="r">';
+    let run = '', key = null, st = '';
+    const flush = () => { if (run) out += `<span style="${st}">${esc(run)}</span>`; run = ''; };
+    for (const c of row) {
+      if (c.cap) { flush(); key = null; out += `<span class="cap ${c.cap}" style="background:${c.under}"><i style="background:${c.bg}"></i></span>`; continue; }
+      const k = c.fg + c.bg + c.b + c.u;
+      if (k !== key) { flush(); key = k; st = `color:${c.fg};background:${c.bg}${c.b ? ';font-weight:700' : ''}${c.u ? ';text-decoration:underline' : ''}`; }
+      run += c.c;
+    }
+    flush(); out += '</div>';
+  }
+  return out;
+}
+
+// ---------- layout engine ----------
+function split(r, dir, ratio, g) {
+  if (dir === 'v') { const w1 = Math.round((r.w - g) * ratio); return [{ x: r.x, y: r.y, w: w1, h: r.h }, { x: r.x + w1 + g, y: r.y, w: r.w - w1 - g, h: r.h }]; }
+  const h1 = Math.round((r.h - g) * ratio); return [{ x: r.x, y: r.y, w: r.w, h: h1 }, { x: r.x, y: r.y + h1 + g, w: r.w, h: r.h - h1 - g }];
+}
+function splitEven(r, k, dir, g) {
+  const out = []; let rest = r;
+  for (let i = k; i > 1; i--) { const [a, b] = split(rest, dir, 1 / i, g); out.push(a); rest = b; }
+  out.push(rest); return out;
+}
+const area = r => r.w * r.h;
+function bsp(A, n, g) {
+  const scheme = get('appearance.tiling_scheme'); let rects = [A];
+  for (let i = 1; i < n; i++) {
+    let idx = rects.length - 1, dir;
+    if (scheme === 'spiral') dir = i % 2 ? 'v' : 'h';
+    else if (scheme === 'alternate') { idx = rects.reduce((m, r, j) => area(r) > area(rects[m]) ? j : m, 0); dir = i % 2 ? 'v' : 'h'; }
+    else { if (scheme === 'longest_side') idx = rects.reduce((m, r, j) => area(r) > area(rects[m]) ? j : m, 0); const r = rects[idx]; dir = r.w / 2.2 >= r.h ? 'v' : 'h'; }
+    const [a, b] = split(rects[idx], dir, .5, g); rects.splice(idx, 1, a, b);
+  }
+  return rects;
+}
+function masterStack(A, n, g) {
+  const pos = get('appearance.master_position'), m = Math.min(get('appearance.master_count'), n), ratio = get('appearance.master_ratio') / 100, s = n - m;
+  const horiz = pos === 'top' || pos === 'bottom';
+  if (!s) return splitEven(A, m, horiz ? 'v' : 'h', g);
+  if (pos === 'center' && s > 1) {
+    const mw = Math.round(A.w * ratio), side = Math.floor((A.w - mw - 2 * g) / 2);
+    const L = { x: A.x, y: A.y, w: side, h: A.h }, M = { x: A.x + side + g, y: A.y, w: mw, h: A.h }, R = { x: A.x + side + g + mw + g, y: A.y, w: A.w - side - mw - 2 * g, h: A.h };
+    const nr = Math.ceil(s / 2), nl = s - nr;
+    return [...splitEven(M, m, 'h', g), ...splitEven(R, nr, 'h', g), ...splitEven(L, nl, 'h', g)];
+  }
+  const first = pos === 'left' || pos === 'top' || pos === 'center';
+  const [a, b] = split(A, horiz ? 'h' : 'v', first ? ratio : 1 - ratio, g);
+  const M = first ? a : b, St = first ? b : a;
+  const masters = splitEven(M, m, horiz ? 'v' : 'h', g);
+  let stack;
+  if (get('appearance.master_grid') && pos === 'left' && m === 1 && n >= 4) {
+    const rows = Math.ceil(s / 2); stack = [];
+    splitEven(St, rows, 'h', g).forEach((r, i) => stack.push(...splitEven(r, Math.min(2, s - i * 2), 'v', g)));
+  } else stack = splitEven(St, s, horiz ? 'v' : 'h', g);
+  return [...masters, ...stack];
+}
+function scrolling(A, n, g) {
+  const cw = Math.round(A.w * get('appearance.scroll_column_width') / 100); const out = [];
+  for (let i = 0; i < n; i++) out.push({ x: A.x + i * (cw + Math.max(g, 0)), y: A.y, w: cw, h: A.h });
+  return out;
+}
+function floating(A, n) {
+  const w = Math.round(A.w * .58), h = Math.round(A.h * .64); const out = [];
+  for (let i = 0; i < n; i++) out.push({ x: A.x + 3 + (n - 1 - i) * 8, y: A.y + 1 + (n - 1 - i) * 3, w, h });
+  return out;
+}
+
+// ---------- pane contents ----------
+const PANES = [
+  { title: 'claude', cwd: '~/dev/tuios', agent: true, lines: [
+    [['✻ ', 'bright_red', 1], ['Claude Code', 'fg', 1], ['  opus · ~/dev/tuios', 'bright_black']], [],
+    [['> ', 'bright_black'], ['add retry with backoff to the HTTP client', 'fg']], [],
+    [['● ', 'green'], ['Read ', 'fg', 1], ['internal/http/client.go', 'cyan']],
+    [['● ', 'green'], ['Update ', 'fg', 1], ['client.go ', 'cyan'], ['+18 ', 'green'], ['−4', 'red']],
+    [['  ⎿ ', 'bright_black'], ['teammate ', 'bright_black'], ['reviewer', 'purple'], [' opened in a pane', 'bright_black']],
+    [['● ', 'yellow'], ['Running go test ./... ', 'fg'], ['(12s)', 'bright_black']], [],
+    [['  The retry loop now backs off 100ms → 3.2s and', 'fg']], [['  gives up after 6 tries.', 'fg']] ] },
+  { title: 'zsh', cwd: '~/dev/tuios', lines: [
+    [['~/dev/tuios', 'blue', 1], [' main', 'purple'], [' ❯ ', 'green'], ['ls', 'fg']],
+    [['cmd/  ', 'blue', 1], ['docs/  ', 'blue', 1], ['internal/  ', 'blue', 1], ['go.mod  ', 'fg'], ['README.md', 'yellow']],
+    [['~/dev/tuios', 'blue', 1], [' main', 'purple'], [' ❯ ', 'green'], ['go test ./...', 'fg']],
+    [['ok   ', 'green'], ['internal/layout  0.41s', 'fg']], [['ok   ', 'green'], ['internal/vt      1.02s', 'fg']],
+    [['FAIL ', 'red', 1], ['internal/shim    0.08s', 'fg']], [['~/dev/tuios', 'blue', 1], [' ❯ ', 'green'], ['▌', 'fg']] ] },
+  { title: 'nvim client.go', cwd: '~/dev/tuios', lines: [
+    [[' 12 ', 'bright_black'], ['func ', 'purple'], ['retry', 'blue'], ['(ctx context.Context) error {', 'fg']],
+    [[' 13 ', 'bright_black'], ['  for ', 'purple'], ['i := 0; i < max; i++ {', 'fg']],
+    [[' 14 ', 'bright_black'], ['    if ', 'purple'], ['err := do(ctx); err == nil {', 'fg']],
+    [[' 15 ', 'bright_black'], ['      return ', 'purple'], ['nil', 'yellow']], [[' 16 ', 'bright_black'], ['    }', 'fg']],
+    [[' 17 ', 'bright_black'], ['    time.', 'fg'], ['Sleep', 'blue'], ['(backoff(i))', 'fg']],
+    [[' 18 ', 'bright_black'], ['  }', 'fg']], [[' 19 ', 'bright_black'], ['  return ', 'purple'], ['ErrRetries', 'yellow']], [[' 20 ', 'bright_black'], ['}', 'fg']] ] },
+  { title: 'btop', cwd: '~', lines: [
+    [['cpu ', 'fg', 1], ['▂▃▅▇▇▅▃▂▃▅▆▇▅▃', 'green'], [' 42%', 'bright_black']], [['mem ', 'fg', 1], ['▇▇▇▇▇▇▅▃▁▁▁▁▁▁', 'yellow'], [' 6.1G', 'bright_black']],
+    [['net ', 'fg', 1], ['▁▂▁▃▂▅▂▁▂▃▁▂▁▁', 'cyan'], [' 1.2M/s', 'bright_black']], [],
+    [['  PID ', 'bright_black'], ['NAME       ', 'bright_black'], ['CPU', 'bright_black']], [[' 4121 ', 'fg'], ['claude     ', 'fg'], ['18%', 'yellow']], [[' 4410 ', 'fg'], ['gopls      ', 'fg'], ['9%', 'fg']] ] },
+  { title: 'git log', cwd: '~/dev/tuios', lines: [
+    [['a41c9e2 ', 'yellow'], ['retry: back off on 5xx', 'fg']], [['7d02f1b ', 'yellow'], ['shim: answer list-clients', 'fg']],
+    [['c93a0e7 ', 'yellow'], ['rail: subagent tree rows', 'fg']], [['15be4d0 ', 'yellow'], ['dock: pill caps', 'fg']] ] },
+  { title: 'logs', cwd: '~/dev/tuios', lines: [
+    [['21:04:11 ', 'bright_black'], ['INFO ', 'green'], ['daemon listening', 'fg']], [['21:04:12 ', 'bright_black'], ['INFO ', 'green'], ['attach session main', 'fg']],
+    [['21:05:40 ', 'bright_black'], ['WARN ', 'yellow'], ['pane 3 slow reader', 'fg']] ] },
+];
+
+// ---------- which-key data (from `tuios keybinds list` and KEYBINDINGS.md) ----------
+const PRESETS = {
+  tuios: { leader: 'ctrl+b', blurb: 'The TUIOS keys. Window mode does most of the work, the leader opens menus.',
+    keys: [['c', 'new window'], ['x', 'close window'], ['n / p', 'next / previous window'], ['z', 'fullscreen window'], ['r', 'rename window'], ['e', 'focus the sidebar'], ['i', 'agents view'], ['o', 'next item needing you'], ['L', 'layout menu…'], ['w', 'workspace menu…'], ['m', 'minimize menu…'], ['k', 'keybind manager'], ['d', 'detach'], ['?', 'help']] },
+  tmux: { leader: 'ctrl+b', blurb: 'tmux 3.8 keys after the leader. A tmux window is a workspace, a tmux pane is a window.',
+    keys: [['% or |', 'split vertically'], ['" or -', 'split horizontally'], ['c', 'first empty workspace'], ['n / p', 'next / prev workspace'], ['1–9', 'workspace 1–9'], ['o', 'next window'], [';', 'previous pane'], ['space', 'cycle the layout'], ['[', 'copy mode'], [',', 'rename workspace'], ['s', 'session switcher'], ['d', 'detach'], ['?', 'help']] },
+  screen: { leader: 'ctrl+a', blurb: 'GNU screen keys after the leader, also on the control variant (ctrl+a ctrl+n).',
+    keys: [['ctrl+a', 'last workspace'], ['a', 'send ctrl+a to the pane'], ['ctrl+t …', 'the tuios menu (moved keys)']] },
+  zellij: { leader: 'ctrl+g', blurb: 'zellij unlock-first keys. Turns on lock mode: the next key runs one action.',
+    keys: [['p', 'pane mode: r d f h j k l c'], ['t', 'tab mode: n x h l'], ['s', 'copy mode'], ['o', 'session switcher'], ['ctrl+t …', 'the tuios menu (moved keys)']] },
+};
+const leader = () => get('keybindings.leader_key') || PRESETS[get('keybindings.preset')].leader;
+
+// ---------- render the screen ----------
+const BORDERS = {
+  rounded: '╭╮╰╯─│─│', normal: '┌┐└┘─│─│', thick: '┏┓┗┛━┃━┃', double: '╔╗╚╝═║═║', block: '████████',
+  'outer-half-block': '▛▜▙▟▀▌▄▐', 'inner-half-block': '▗▖▝▘▄▐▀▌', ascii: '++++-|-|', hidden: '        ', glyphs: '╭╮╰╯─│─│' };
+function goTime(layout, d) {
+  const p2 = n => String(n).padStart(2, '0'); const days = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'], mons = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  return layout.replace(/2006|Mon|Jan|15|03|04|05|01|02|PM|3|2|1/g, t => ({ '2006': d.getFullYear(), Mon: days[d.getDay()], Jan: mons[d.getMonth()], '15': p2(d.getHours()), '03': p2(d.getHours() % 12 || 12), '04': p2(d.getMinutes()), '05': p2(d.getSeconds()), '01': p2(d.getMonth() + 1), '02': p2(d.getDate()), PM: d.getHours() < 12 ? 'AM' : 'PM', '3': d.getHours() % 12 || 12, '2': d.getDate(), '1': d.getMonth() + 1 })[t]);
+}
+function gradientAt(stops, angle, x, y, r) {
+  const a = angle * Math.PI / 180, cx = Math.cos(a), cy = Math.sin(a);
+  const u = (x - r.x) / Math.max(1, r.w - 1), v = (y - r.y) / Math.max(1, r.h - 1);
+  const proj = [[0,0],[1,0],[0,1],[1,1]].map(([p, q]) => p * cx + q * cy); const lo = Math.min(...proj), hi = Math.max(...proj);
+  let t = ((u * cx + v * cy) - lo) / Math.max(1e-6, hi - lo); t = Math.max(0, Math.min(1, t));
+  const seg = t * (stops.length - 1), i = Math.min(stops.length - 2, Math.floor(seg)); return mix(stops[i], stops[i + 1], seg - i);
+}
+
+function drawPane(r, idx, focused, T, R, clip) {
+  if (r.w < 4 || r.h < 3) return;
+  const glyphSet = get('appearance.glyphs');
+  const zen = get('appearance.zen_mode') === 'always';
+  let style = get('appearance.border_style');
+  if (glyphSet === 'ascii' && style !== 'hidden') style = 'ascii';
+  if (zen) style = 'hidden';
+  const B = [...BORDERS[style] || BORDERS.rounded];
+  const term = P.mode === 'terminal';
+  let bcol;
+  if (focused) bcol = color(get(term ? 'appearance.border_focused_color_terminal' : 'appearance.border_focused_color_window'), T, R) || color(get('appearance.border_focused_color'), T, R) || (term ? R.success : R.accent_bright);
+  else bcol = color(get('appearance.border_unfocused_color'), T, R) || R.muted;
+  const stops = focused ? String(get('appearance.border_focused_gradient')).split(/\s+/).map(s => color(s, T, R)).filter(Boolean) : [];
+  const ang = get('appearance.border_gradient_angle');
+  const bc = (x, y) => stops.length >= 2 ? gradientAt(stops, ang, x, y, r) : bcol;
+  const dim = focused ? 0 : get('appearance.dim_unfocused') / 100;
+  const pbg = dim ? mix(T.bg, T.dark ? '#000000' : '#ffffff', dim * .45) : T.bg;
+  fill(r.x, r.y, r.w, r.h, pbg, clip);
+  const x2 = r.x + r.w - 1, y2 = r.y + r.h - 1;
+  for (let x = r.x + 1; x < x2; x++) { put(x, r.y, B[4], bc(x, r.y), pbg, null, clip); put(x, y2, B[6], bc(x, y2), pbg, null, clip); }
+  for (let y = r.y + 1; y < y2; y++) { put(r.x, y, B[5], bc(r.x, y), pbg, null, clip); put(x2, y, B[7], bc(x2, y), pbg, null, clip); }
+  put(r.x, r.y, B[0], bc(r.x, r.y), pbg, null, clip); put(x2, r.y, B[1], bc(x2, r.y), pbg, null, clip);
+  put(r.x, y2, B[2], bc(r.x, y2), pbg, null, clip); put(x2, y2, B[3], bc(x2, y2), pbg, null, clip);
+
+  // content
+  const pane = PANES[idx % PANES.length];
+  const fgFor = k => { const c = k === 'fg' ? T.fg : T[k]; return dim && get('appearance.dim_foreground') ? mix(c, pbg, dim * .75) : c; };
+  const inner = { x: r.x + 1, y: r.y + 1, w: r.w - 2, h: r.h - 2 };
+  const cc = clip ? { x: Math.max(inner.x, clip.x), y: Math.max(inner.y, clip.y), w: Math.min(inner.x + inner.w, clip.x + clip.w) - Math.max(inner.x, clip.x), h: Math.min(inner.y + inner.h, clip.y + clip.h) - Math.max(inner.y, clip.y) } : inner;
+  pane.lines.forEach((ln, j) => { let x = inner.x + 1; for (const [s, k, b] of ln) x += text(x, inner.y + j, s, fgFor(k), pbg, { b }, cc); });
+
+  // scrollbar on the focused pane
+  if (focused && !get('appearance.hide_scrollbar') && style !== 'hidden' && r.h > 6) {
+    const tint = { quiet: mix(bcol, pbg, .45), border: bcol, muted: R.muted }[get('appearance.scrollbar.tint')];
+    const t0 = r.y + Math.round(r.h * .35), t1 = r.y + Math.round(r.h * .6);
+    for (let y = r.y + 1; y < y2; y++) {
+      if (y >= t0 && y <= t1) put(x2, y, get('appearance.scrollbar.style') === 'thin' ? '┃' : '█', tint, pbg, null, clip);
+      else if (get('appearance.scrollbar.style') === 'track') put(x2, y, '│', mix(tint, pbg, .35), pbg, null, clip);
+    }
+  }
+
+  // title bar
+  if (zen) return;
+  const tpos = get('appearance.window_title_position');
+  const showBtns = !get('appearance.hide_window_buttons') && P.mode === 'window';
+  const ty = tpos === 'bottom' ? y2 : r.y;
+  const bpos = get('appearance.window_button_position'), bstyle = get('appearance.window_button_style');
+  let left = r.x + 2, right = x2 - 2;
+  if (showBtns) {
+    const by = r.y;
+    if (bstyle === 'dots') {
+      const dots = [T.red, T.yellow, T.green]; const bw = 5;
+      const bx = bpos === 'left' ? r.x + 2 : x2 - 1 - bw;
+      dots.forEach((c, i) => put(bx + i * 2, by, glyphSet === 'ascii' ? 'o' : '●', focused ? c : mix(c, pbg, .55), pbg, null, clip));
+      if (by === ty) { if (bpos === 'left') left = bx + bw + 1; else right = bx - 2; }
+    } else {
+      const lbl = glyphSet === 'ascii' ? '_ # x' : '− □ ✕'; const bw = plen(lbl);
+      const bx = bpos === 'left' ? r.x + 2 : x2 - 1 - bw;
+      pill(bx, by, lbl, focused ? T.bg : T.fg, focused ? bcol : R.surface, glyphSet !== 'ascii', null, clip);
+      if (by === ty) { if (bpos === 'left') left = bx + bw + 1; else right = bx - 2; }
+    }
+  }
+  if (tpos === 'hidden') return;
+  let title = (get('appearance.window_title_format') || '{title}').replace('{title}', pane.title).replace('{index}', idx + 1).replace('{cwd}', pane.cwd);
+  const room = right - left + 1 - 2; if (room < 3) return;
+  if ([...title].length > room) title = [...title].slice(0, room - 1).join('') + '…';
+  const tw = [...title].length + 2;
+  let al = get('appearance.window_title_align');
+  if (al === 'auto') al = showBtns && ty === r.y ? (bpos === 'left' ? 'right' : 'left') : 'left';
+  const tx = al === 'left' ? left : al === 'right' ? right - tw + 1 : Math.round(r.x + (r.w - tw) / 2);
+  const ts = get('appearance.window_title_style');
+  if (ts === 'plain') text(tx, ty, ' ' + title + ' ', focused ? bcol : R.muted, pbg, { b: focused }, clip);
+  else pill(tx, ty, title, focused ? T.bg : T.fg, focused ? bcol : R.surface, ts === 'pill' && glyphSet !== 'ascii', { b: focused }, clip);
+}
+
+function drawDock(y, rule, T, R) {
+  const dbg = T.bg, caps = get('appearance.dock_pill_caps') && get('appearance.glyphs') !== 'ascii';
+  fill(0, y, W, 1, dbg);
+  if (rule !== null) for (let x = 0; x < W; x++) put(x, rule, '─', mix(R.muted, dbg, .3), dbg);
+  const term = P.mode === 'terminal', tiled = get('startup.tiled');
+  const cell = name => {
+    switch (name) {
+      case 'mode': {
+        const icon = tiled ? '▦' : '◫'; let s = (term ? 'TERM' : 'WIN');
+        s = icon + ' ' + s + (tiled && get('appearance.dock_mode_split_letter') ? ' V' : '');
+        return [{ s, fg: T.bg, bg: term ? R.success : R.accent, b: 1, pill: 1 }];
+      }
+      case 'workspaces': {
+        if (!get('appearance.dock_workspace_tabs')) return [];
+        const names = ['main', 'web', 'notes'], max = get('appearance.dock_workspace_label_max'), fmt = get('appearance.dock_workspace_tab_format') || '{name}';
+        return names.map((n, i) => { let s = fmt.replace('{index}', i + 1).replace('{name}', n).replace('{icon}', '◆').replace('{zoom}', ''); if (max && [...s].length > max) s = [...s].slice(0, max - 1).join('') + '…'; return { s, fg: i ? T.fg : T.bg, bg: i ? R.surface : R.accent_bright, pill: 1, b: !i }; });
+      }
+      case 'windows': return [{ s: '▁ htop', fg: R.muted, bg: R.panel, pill: 1 }];
+      case 'notifications': return [{ s: '▲ reviewer needs you', fg: R.warning, bg: dbg }];
+      case 'cpu': return get('appearance.show_cpu') ? [{ s: 'cpu ▂▃▅▃▆▂', fg: R.accent, bg: dbg }] : [];
+      case 'ram': return get('appearance.show_ram') ? [{ s: 'ram 6.1G', fg: T.fg, bg: dbg }] : [];
+      case 'clock': return [{ s: goTime(get('dock.clock.format') || get('appearance.clock_format') || '15:04', new Date()), fg: T.fg, bg: dbg, b: 1 }];
+      case 'session-controls': return [{ s: 'main ⏻', fg: T.fg, bg: R.surface, pill: 1 }];
+      default: return [];
+    }
+  };
+  const width = items => items.reduce((a, c) => a + plen(c.s) + 1, 0);
+  const draw = (x, items) => { for (const c of items) { x += (c.pill ? pill(x, y, c.s, c.fg, c.bg, caps, { b: c.b }) : text(x, y, ' ' + c.s + ' ', c.fg, c.bg, { b: c.b })) + 1; } };
+  const L = get('dock.left').flatMap(cell), C = get('dock.center').flatMap(cell), Rr = get('dock.right').flatMap(cell);
+  draw(1, L); draw(Math.round((W - width(C)) / 2), C); draw(W - width(Rr), Rr);
+}
+
+function drawRail(x0, rw, y0, y1, side, T, R) {
+  const bg = R.panel; fill(x0, y0, rw, y1 - y0, bg);
+  const sepX = side === 'left' ? x0 + rw - 1 : x0;
+  for (let y = y0; y < y1; y++) put(sepX, y, '│', mix(R.muted, bg, .35), bg);
+  const ix = side === 'left' ? x0 + 1 : x0 + 2, iw = rw - 3;
+  const clip = { x: ix - 1, y: y0, w: iw + 2, h: y1 - y0 };
+  const secs = String(get('appearance.sidebar.sections')).split(',').map(s => s.trim()).filter(Boolean).map(s => { const [n, p] = s.split(':'); return { n, p: p ? +p : null }; }).filter(s => ['sessions','terminals','files','agents','git'].includes(s.n));
+  const total = y1 - y0 - 1; const fixed = secs.reduce((a, s) => a + (s.p || 0), 0); const free = secs.filter(s => !s.p).length;
+  const roomy = get('appearance.sidebar.density') === 'roomy';
+  const hs = get('appearance.sidebar.header_style'), upper = get('appearance.sidebar.header_case') === 'uppercase';
+  const icons = { sessions: '◫', terminals: '▣', files: '▤', agents: '✦', git: '⎇' };
+  const rowStyle = get('appearance.sidebar.row_style'), glyphs = get('appearance.sidebar.show_glyphs');
+  const sessCol = get('appearance.session_colors') ? [R.accent, T.purple, T.green] : [T.fg, T.fg, T.fg];
+  let y = y0 + 1;
+  const row = (txt, fg, o = {}) => {
+    if (y >= y1) return;
+    if (o.sel) {
+      if (rowStyle === 'bar') put(ix - 1, y, '▌', R.accent, bg, null, clip);
+      if (rowStyle === 'pill') { pill(ix - 1, y, ' '.repeat(Math.max(0, iw - 1)), fg, R.surface, true, null, clip); }
+    }
+    let x = ix; const rbg = o.sel && rowStyle === 'pill' ? R.surface : bg;
+    if (o.sel && rowStyle === 'marker') x += text(x, y, '› ', R.accent, rbg, null, clip);
+    for (const [s, c, b] of txt) x += text(x, y, s, c, rbg, { b, u: o.sel && rowStyle === 'underline' }, clip);
+    if (o.right) text(ix + iw - [...o.right].length, y, o.right, R.muted, rbg, null, clip);
+    y++;
+  };
+  secs.forEach((sec, si) => {
+    const share = sec.p ? sec.p / 100 : Math.max(0, (100 - fixed) / 100 / Math.max(1, free));
+    const end = Math.min(y1, y + Math.max(2, Math.round(total * share)));
+    if (roomy && si) y++;
+    if (y >= y1) return;
+    const name = upper ? sec.n.toUpperCase() : sec.n;
+    const style = hs === 'auto' ? 'rule' : hs;
+    if (style === 'plain') text(ix, y, name, R.muted, bg, { b: 1 }, clip);
+    else if (style === 'rule') { const n = text(ix, y, name + ' ', R.muted, bg, { b: upper }, clip); for (let x = ix + n; x < ix + iw; x++) put(x, y, '─', mix(R.muted, bg, .45), bg, null, clip); }
+    else if (style === 'pill') pill(ix, y, name, R.accent, R.surface, get('appearance.glyphs') !== 'ascii', { b: 1 }, clip);
+    else text(ix, y, icons[sec.n] + ' ' + name, R.muted, bg, { b: 1 }, clip);
+    y++;
+    const save = y1; const lim = end;
+    const r2 = (t, f, o) => { if (y < lim) row(t, f, o); };
+    const num = i => get('appearance.sidebar.show_numbers') ? (i + 1) + ' ' : '';
+    if (sec.n === 'sessions') {
+      [['main', 3], ['tuios-dev', 2], ['scratch', 1]].forEach(([n, c], i) => r2([[glyphs ? (i === 0 ? '● ' : '○ ') : '', i === 0 ? R.accent : R.muted], [num(i), R.muted], [n, sessCol[i], i === 0]], T.fg, { sel: i === 0, right: get('appearance.sidebar.show_counts') ? String(c) : '' }));
+    } else if (sec.n === 'terminals') {
+      PANES.slice(0, P.panes).forEach((p, i) => r2([[glyphs && p.agent ? '● ' : '  ', R.accent], [p.title, i === 0 ? T.fg : R.muted, i === 0]], T.fg, {}));
+    } else if (sec.n === 'files') {
+      const ic = get('appearance.sidebar.file_icons'), icc = get('appearance.sidebar.file_icon_colors');
+      const tree = get('appearance.sidebar.files_style') === 'tree';
+      [['cmd/', T.blue, 1], ['docs/', T.blue, 1], ['internal/', T.blue, 1], ...(tree ? [['  http/', T.blue, 1], ['    client.go', T.cyan]] : []), ['go.mod', T.purple], ['README.md', T.yellow]]
+        .forEach(([n, c, d]) => r2([[ic ? (d ? '▸ ' : '▪ ') : '', icc ? c : R.muted], [n, d ? T.fg : R.muted, d]], T.fg, {}));
+    } else if (sec.n === 'agents') {
+      r2([[glyphs ? '● ' : '', R.accent], ['claude', T.fg, 1]], T.fg, { right: '4m' });
+      const subs = [['reviewer', '2m'], ['tester', '41s'], ['docs', '9s']], mode = get('appearance.sidebar.subagent_rows'), col = get('appearance.sidebar.subagent_collapse');
+      const max = get('appearance.sidebar.subagent_max_rows');
+      if (col !== 'off') r2([[col === 'collapsed' ? '  ▸ ' : '  ▾ ', R.muted], ['3 subagents', R.muted]], T.fg, {});
+      if (col !== 'collapsed') {
+        if (mode === 'count') r2([['  +3 subagents', R.muted]], T.fg, {});
+        else subs.slice(0, max || 9).forEach(([n, t], i) => r2([[mode === 'tree' ? (i === subs.length - 1 ? '  └ ' : '  ├ ') : '    ', R.muted], [glyphs ? (i ? '○ ' : '● ') : '', i ? R.muted : R.accent], [n, T.fg]], T.fg, { right: t }));
+      }
+      r2([[glyphs ? '▲ ' : '', R.warning], ['codex', T.fg]], T.fg, { right: 'needs you' });
+    } else if (sec.n === 'git') {
+      r2([['⎇ ', T.purple], ['main', T.fg, 1]], T.fg, {});
+      if (get('appearance.git_dirty')) r2([['+2 ', T.green], ['~3 ', T.yellow], ['?1', R.muted]], T.fg, {});
+    }
+    y = Math.max(y, Math.min(end, save));
+  });
+}
+
+function drawWhichKey(A, T, R) {
+  if (!get('appearance.whichkey_enabled')) return;
+  const ks = PRESETS[get('keybindings.preset')].keys; const w = 38, h = Math.min(ks.length + 3, A.h - 2);
+  const pos = get('appearance.whichkey_position') || 'bottom-right';
+  const x = pos.includes('left') ? A.x + 2 : pos === 'center' ? A.x + Math.round((A.w - w) / 2) : A.x + A.w - w - 2;
+  const y = pos.startsWith('top') ? A.y + 1 : pos === 'center' ? A.y + Math.round((A.h - h) / 2) : A.y + A.h - h - 1;
+  const sbg = R.surface; fill(x, y, w, h, sbg);
+  if (get('appearance.frame_panels')) { const B = [...BORDERS[get('appearance.border_style')] || BORDERS.rounded]; for (let i = 1; i < w - 1; i++) { put(x + i, y, B[4], R.muted, sbg); put(x + i, y + h - 1, B[6], R.muted, sbg); } for (let j = 1; j < h - 1; j++) { put(x, y + j, B[5], R.muted, sbg); put(x + w - 1, y + j, B[7], R.muted, sbg); } put(x, y, B[0], R.muted, sbg); put(x + w - 1, y, B[1], R.muted, sbg); put(x, y + h - 1, B[2], R.muted, sbg); put(x + w - 1, y + h - 1, B[3], R.muted, sbg); }
+  text(x + 2, y + 1, leader() + ' …', R.accent, sbg, { b: 1 });
+  ks.slice(0, h - 3).forEach(([k, d], i) => { text(x + 2, y + 2 + i, k.padEnd(8), T.yellow, sbg, { b: 1 }); text(x + 11, y + 2 + i, [...d].slice(0, w - 13).join(''), T.fg, sbg); });
+}
+
+function render() {
+  const T = theme(), R = roles(T);
+  initGrid(T.bg, T.fg);
+  const dpos = get('appearance.dockbar_position'), compact = get('appearance.dock_compact');
+  const drows = dpos === 'hidden' ? 0 : compact ? 1 : 2;
+  const top = dpos === 'top' ? drows : 0, bot = dpos === 'bottom' ? drows : 0;
+  const rpos = get('appearance.sidebar.enabled') ? get('appearance.sidebar.position') : 'hidden';
+  const rw = rpos === 'hidden' ? 0 : Math.max(16, Math.min(48, get('appearance.sidebar.width')));
+  const A = { x: rpos === 'left' ? rw : 0, y: top, w: W - rw, h: H - top - bot };
+  const g = get('appearance.shared_borders') && get('appearance.gap') === 0 ? -1 : get('appearance.gap');
+  const n = P.panes; let rects, order;
+  if (!get('startup.tiled')) { rects = floating(A, n); order = [...rects.keys()].reverse(); }
+  else {
+    const lay = get('startup.layout');
+    rects = lay === 'master-stack' ? masterStack(A, n, g) : lay === 'scrolling' ? scrolling(A, n, g) : bsp(A, n, g);
+    order = [...rects.keys()].slice(1).concat(0);
+  }
+  for (const i of order) drawPane(rects[i], i, i === 0, T, R, A);
+  if (step === 'keys') drawWhichKey(A, T, R);
+  if (rw) drawRail(rpos === 'left' ? 0 : W - rw, rw, top, H - bot, rpos, T, R);
+  if (drows) { const y = dpos === 'top' ? 0 : H - 1; drawDock(y, compact ? null : (dpos === 'top' ? 1 : H - 2), T, R); }
+  const el = document.getElementById('grid'); el.innerHTML = gridHTML();
+  fitGrid();
+  document.getElementById('dims').textContent = `${W}×${H} cells · ${T.name}`;
+}
+let charRatio = 0;
+function fitGrid() {
+  const el = document.getElementById('grid'), box = document.getElementById('screen');
+  if (!charRatio) { const m = document.createElement('span'); m.textContent = 'M'.repeat(100); m.style.cssText = 'position:absolute;visibility:hidden;font-size:100px;white-space:pre;font-family:var(--f-mono)'; document.body.appendChild(m); charRatio = m.getBoundingClientRect().width / 100 / 100; m.remove(); if (!charRatio) charRatio = .6; }
+  el.style.fontSize = (box.clientWidth / (W * charRatio)) * .999 + 'px';
+}
+window.addEventListener('resize', fitGrid);
+if (document.fonts) document.fonts.ready.then(() => { charRatio = 0; fitGrid(); });
+
+// ---------- controls ----------
+const h = (tag, attrs = {}, ...kids) => { const e = document.createElement(tag); for (const k in attrs) { if (k === 'on') for (const ev in attrs.on) e.addEventListener(ev, attrs.on[ev]); else if (k === 'html') e.innerHTML = attrs[k]; else if (attrs[k] !== false && attrs[k] != null) e.setAttribute(k, attrs[k]); } for (const c of kids.flat()) if (c != null) e.append(c.nodeType ? c : document.createTextNode(c)); return e; };
+const SAMPLES = { rounded: '╭─╮', normal: '┌─┐', thick: '┏━┓', double: '╔═╗', block: '███', 'outer-half-block': '▛▀▜', 'inner-half-block': '▗▄▖', ascii: '+-+', hidden: '   ', glyphs: '╭─╮' };
+const pretty = p => p.split('.').pop().replace(/_/g, ' ').replace(/^./, c => c.toUpperCase());
+function control(p, o = {}) {
+  const s = SCHEMA[p]; if (!s) return null;
+  const v = get(p), mod = p in S;
+  const lab = h('div', { class: 'lab' }, o.label || pretty(p), mod ? h('button', { class: 'reset', type: 'button', on: { click: () => set(p, s.def) } }, 'reset') : null, h('code', {}, p));
+  let ctl;
+  const id = 'c-' + p.replace(/[^a-z0-9]/gi, '-');
+  if (s.type === 'bool') {
+    ctl = h('label', { class: 'sw' }, h('input', { type: 'checkbox', id, ...(v ? { checked: '' } : {}), on: { change: e => set(p, e.target.checked) } }), v ? 'on' : 'off');
+  } else if (s.accepted && s.accepted.length <= 12) {
+    const opts = [...s.accepted]; if (s.def === '' && !opts.includes('')) opts.unshift('');
+    ctl = h('div', { class: 'seg', role: 'group' }, opts.map(a => h('button', { type: 'button', 'aria-pressed': String(v === a), on: { click: () => set(p, a) } }, p === 'appearance.border_style' ? h('span', { class: 'smp' }, SAMPLES[a]) : null, a === '' ? 'default' : a)));
+  } else if (s.accepted) {
+    ctl = h('select', { id, on: { change: e => set(p, e.target.value) } }, s.accepted.map(a => h('option', { value: a, ...(a === v ? { selected: '' } : {}) }, a)));
+  } else if (s.type === 'int' && s.min != null) {
+    const out = h('output', {}, String(v) + (o.unit || ''));
+    ctl = h('div', { class: 'rng' }, h('input', { type: 'range', id, min: s.min, max: s.max, step: o.step || 1, value: v, on: { input: e => { out.textContent = e.target.value + (o.unit || ''); S[p] = +e.target.value; if (S[p] === s.def) delete S[p]; save(); render(); updatePill(); }, change: () => refresh() } }), out);
+  } else if (s.type === 'int') {
+    ctl = h('input', { type: 'text', inputmode: 'numeric', id, value: v, on: { change: e => set(p, Number(e.target.value) || 0) } });
+  } else {
+    ctl = h('input', { type: 'text', id, value: v, placeholder: o.placeholder || (s.def === '' ? 'empty = default' : String(s.def)), on: { change: e => set(p, e.target.value) } });
+  }
+  const sugg = o.sugg ? h('div', { class: 'sugg' }, o.sugg.map(x => h('button', { type: 'button', on: { click: () => set(p, x) } }, x === '' ? 'clear' : x))) : null;
+  return h('div', { class: 'row' + (mod ? ' mod' : '') }, lab, ctl, sugg, o.nodesc ? null : h('div', { class: 'desc' }, o.desc || s.desc || ''));
+}
+const head = (t, sub) => h('div', { class: 'group-h' }, t, sub ? h('small', {}, sub) : null);
+
+function themeGrid() {
+  const cur = get('appearance.theme');
+  const list = [TERMINAL, ...THEME_ORDER.map(k => THEMES[k])];
+  return h('div', { class: 'themes' }, list.map(t => h('button', { type: 'button', 'aria-pressed': String(cur === t.id), on: { click: () => set('appearance.theme', t.id) } },
+    h('div', { class: 'tprev', style: `background:${t.bg};color:${t.fg}` },
+      h('span', { style: `color:${t.blue}` }, '~/dev'), h('span', { style: `color:${t.green}` }, ' ❯ '), 'ls', h('br'),
+      h('span', { style: `color:${t.purple}` }, 'func '), h('span', { style: `color:${t.yellow}` }, 'nil'),
+      h('div', { class: 'tbar' }, ['red','green','yellow','blue','purple','cyan'].map(c => h('span', { style: `background:${t[c]}` })))),
+    h('div', { class: 'tname' }, t.name, h('small', {}, t.id ? (t.dark ? 'dark' : 'light') : 'yours')))));
+}
+function themeLight() {
+  const lights = Object.values(THEMES).filter(t => !t.dark);
+  const v = get('appearance.theme_light');
+  return h('div', { class: 'row' + ('appearance.theme_light' in S ? ' mod' : '') }, h('div', { class: 'lab' }, 'Theme while the terminal is light', h('code', {}, 'appearance.theme_light')),
+    h('select', { id: 'c-theme-light', on: { change: e => set('appearance.theme_light', e.target.value) } }, h('option', { value: '' }, 'same as above'), lights.map(t => h('option', { value: t.id, ...(t.id === v ? { selected: '' } : {}) }, t.name))),
+    h('div', { class: 'desc' }, 'TUIOS asks the terminal for its background at startup and switches to this one on a light background. The rest of the ' + Object.keys(THEMES).length + ' examples here, and all 345 built-in themes, are listed by tuios --list-themes.'));
+}
+
+function dockEditor() {
+  const where = {}; for (const r of ['left', 'center', 'right']) for (const n of get('dock.' + r)) where[n] = r;
+  const move = (n, r) => { const L = { left: get('dock.left').filter(x => x !== n), center: get('dock.center').filter(x => x !== n), right: get('dock.right').filter(x => x !== n) };
+    if (r !== 'off') { L[r].push(n); L[r].sort((a, b) => DOCK_ITEMS.indexOf(a) - DOCK_ITEMS.indexOf(b)); }
+    for (const k in L) { if (same(L[k], SCHEMA['dock.' + k].def)) delete S['dock.' + k]; else S['dock.' + k] = L[k]; } save(); refresh(); };
+  const notes = { trail: 'recent places, empty until used', tape: 'tape recording status', transfers: 'cross-machine copies, empty when idle', 'copy-help': 'shows in copy mode', cpu: 'needs Show CPU', ram: 'needs Show RAM' };
+  return h('div', {}, head('Dock components', 'which region each sits in'),
+    h('div', { class: 'lister' }, DOCK_ITEMS.map(n => { const r = where[n] || 'off';
+      return h('div', { class: 'item' + (r === 'off' ? ' off' : '') }, h('div', { class: 'nm' }, n, notes[n] ? h('span', { class: 'desc', style: 'font-family:var(--f-body)' }, notes[n]) : null),
+        h('div', { class: 'ctl' }, ['off', 'left', 'center', 'right'].map(x => h('button', { type: 'button', 'aria-pressed': String(r === x), on: { click: () => move(n, x) } }, x)))); })));
+}
+
+function sectionEditor() {
+  const ALL = ['sessions', 'terminals', 'files', 'agents', 'git'];
+  const cur = String(get('appearance.sidebar.sections')).split(',').map(s => s.trim()).filter(Boolean).map(s => { const [n, p] = s.split(':'); return { n, p: p || '' }; });
+  const write = list => set('appearance.sidebar.sections', list.map(s => s.n + (s.p ? ':' + s.p : '')).join(','));
+  const rows = [...cur, ...ALL.filter(n => !cur.find(c => c.n === n)).map(n => ({ n, p: '', off: true }))];
+  return h('div', {}, head('Rail sections', 'order, and share of the height in %'),
+    h('div', { class: 'lister' }, rows.map((s, i) => h('div', { class: 'item' + (s.off ? ' off' : '') }, h('div', { class: 'nm' }, s.n),
+      h('div', { class: 'ctl' },
+        s.off ? h('button', { type: 'button', on: { click: () => write([...cur, { n: s.n, p: '' }]) } }, 'add')
+          : [h('input', { type: 'text', inputmode: 'numeric', 'aria-label': s.n + ' share', placeholder: 'auto', value: s.p, on: { change: e => { cur[i].p = e.target.value.replace(/\D/g, ''); write(cur); } } }),
+             h('button', { type: 'button', 'aria-label': 'move up', on: { click: () => { if (i) { [cur[i - 1], cur[i]] = [cur[i], cur[i - 1]]; write(cur); } } } }, '↑'),
+             h('button', { type: 'button', 'aria-label': 'move down', on: { click: () => { if (i < cur.length - 1) { [cur[i + 1], cur[i]] = [cur[i], cur[i + 1]]; write(cur); } } } }, '↓'),
+             h('button', { type: 'button', on: { click: () => write(cur.filter((_, j) => j !== i)) } }, 'remove')])))),
+    h('div', { class: 'desc', style: 'margin-top:6px' }, 'Saved as ', h('code', {}, String(get('appearance.sidebar.sections')))));
+}
+
+function presetCards() {
+  const cur = get('keybindings.preset');
+  return h('div', { class: 'presets' }, Object.entries(PRESETS).map(([k, p]) => h('button', { type: 'button', 'aria-pressed': String(cur === k), on: { click: () => set('keybindings.preset', k) } },
+    h('b', {}, k), h('kbd', {}, p.leader), h('small', {}, p.blurb))));
+}
+function keyList() {
+  const p = PRESETS[get('keybindings.preset')];
+  return h('div', {}, head('After ' + leader(), 'also shown in the preview\'s which-key popup'),
+    h('div', { class: 'keys' }, p.keys.flatMap(([k, d]) => [h('kbd', {}, k), h('span', {}, d)])),
+    h('p', { class: 'desc', style: 'margin-top:8px' }, 'Window mode, the sidebar, copy mode and the agents view keep the TUIOS keys under every preset. Run tuios keybinds cheatsheet ' + get('keybindings.preset') + ' for the full list.'));
+}
+
+// ---------- steps ----------
+const STEPS = [
+  { id: 'look', n: 'Theme', title: 'Theme and color', lede: 'Pick a palette. TUIOS derives its borders, dock and rail colors from it.', build: () => [
+    themeGrid(), themeLight(), head('Border color'),
+    control('appearance.border_focused_color', { label: 'Focused border', sugg: ['accent', 'bright_purple', 'bright_yellow', '#f5c2e7', ''] }),
+    control('appearance.border_focused_gradient', { label: 'Focused border gradient', sugg: ['bright_blue bright_purple', 'bright_red bright_yellow', 'cyan blue purple', ''] }),
+    control('appearance.border_gradient_angle', { label: 'Gradient angle', unit: '°' }),
+    control('appearance.border_unfocused_color', { label: 'Unfocused border', sugg: ['bright_black', 'black', ''] }),
+    head('Glyphs and transitions'),
+    control('appearance.glyphs', { label: 'Glyph set', desc: 'default needs a Nerd Font. unicode avoids Nerd Font glyphs. ascii stays in 7-bit ASCII.', sugg: ['default', 'unicode', 'ascii'] }),
+    control('appearance.theme_transition', { label: 'Theme change effect' }) ] },
+  { id: 'windows', n: 'Windows', title: 'Window frames', lede: 'Borders, title bars and buttons on every pane.', build: () => [
+    control('appearance.border_style', { label: 'Border style' }),
+    control('appearance.gap', { label: 'Gap between panes', unit: ' cells' }),
+    control('appearance.shared_borders', { label: 'Shared borders', desc: 'One border between neighbouring tiled panes. Shown in the preview when the gap is 0.' }),
+    head('Title bar'),
+    control('appearance.window_title_position', { label: 'Title position' }), control('appearance.window_title_style', { label: 'Title shape' }),
+    control('appearance.window_title_align', { label: 'Title alignment' }),
+    control('appearance.window_title_format', { label: 'Title template', sugg: ['{title}', '{index}: {title}', '{title} · {cwd}', ''] }),
+    head('Buttons', 'shown in window mode'),
+    control('appearance.window_button_style', { label: 'Button style' }), control('appearance.window_button_position', { label: 'Button side' }),
+    control('appearance.hide_window_buttons', { label: 'Hide buttons' }),
+    head('Focus'),
+    control('appearance.dim_unfocused', { label: 'Dim unfocused panes', unit: '%' }), control('appearance.dim_foreground', { label: 'Dim the text too' }),
+    control('appearance.zen_mode', { label: 'Zen mode', desc: 'Hide window borders: never, always, or while the mouse is idle.' }),
+    head('Scrollbar'),
+    control('appearance.hide_scrollbar', { label: 'Hide scrollbar' }), control('appearance.scrollbar.style', { label: 'Scrollbar style' }), control('appearance.scrollbar.tint', { label: 'Scrollbar tint' }) ] },
+  { id: 'layout', n: 'Layout', title: 'Tiling and layout', lede: 'How panes share the screen. Use the pane count above the preview to see how it fills up.', build: () => [
+    control('startup.tiled', { label: 'Start tiled', desc: 'Off starts new sessions with floating windows.' }),
+    control('startup.layout', { label: 'Layout a new session starts in' }),
+    head('BSP', 'when the layout is bsp'),
+    control('appearance.tiling_scheme', { label: 'Where new windows go' }),
+    head('Master-stack', 'when the layout is master-stack'),
+    control('appearance.master_position', { label: 'Master side' }), control('appearance.master_ratio', { label: 'Master width', unit: '%' }),
+    control('appearance.master_count', { label: 'Master panes' }), control('appearance.master_grid', { label: 'Stack as a grid' }),
+    head('Scrolling', 'when the layout is scrolling'),
+    control('appearance.scroll_column_width', { label: 'Column width', unit: '%' }), control('appearance.scroll_column_max', { label: 'Widest column', unit: '%' }),
+    head('Zoom'),
+    control('appearance.zoom_size', { label: 'Zoom size', unit: '%' }), control('appearance.zoom_borderless', { label: 'Borderless zoom' }), control('appearance.zoom_animation', { label: 'Animate zoom' }),
+    head('Start-up'),
+    control('startup.open_default_window', { label: 'Open a terminal in an empty session' }), control('startup.start_in_terminal_mode', { label: 'Start in terminal mode' }),
+    control('workspaces.new_window_when_empty', { label: 'New pane on an empty workspace' }) ] },
+  { id: 'dock', n: 'Dock', title: 'The dock', lede: 'The bar with the mode pill, workspaces, notifications and clock.', build: () => [
+    control('appearance.dockbar_position', { label: 'Dock position' }), control('appearance.dock_compact', { label: 'Compact dock', desc: 'One row with no rule. The panes get one more row.' }),
+    control('appearance.dock_pill_caps', { label: 'Rounded pill caps' }),
+    control('appearance.dock_workspace_tabs', { label: 'Workspace tabs' }),
+    control('appearance.dock_workspace_tab_format', { label: 'Workspace tab template', sugg: ['{name}', '{index}', '{index} {name}', ''] }),
+    control('appearance.dock_workspace_label_max', { label: 'Workspace label length', unit: ' cells' }),
+    control('appearance.dock_mode_split_letter', { label: 'Split letter in the mode pill' }),
+    control('appearance.show_cpu', { label: 'Show CPU graph' }), control('appearance.show_ram', { label: 'Show RAM' }),
+    control('dock.clock.format', { label: 'Clock format', placeholder: '15:04', sugg: ['15:04', '15:04:05', 'Mon 3:04PM', 'Jan 2 15:04', ''], desc: 'A Go time layout. 15 = hour, 04 = minute, 05 = second.' }),
+    control('appearance.dock_prefix_indicator', { label: 'Armed leader shows as' }),
+    dockEditor() ] },
+  { id: 'rail', n: 'Rail', title: 'The session rail', lede: 'The sidebar with sessions, terminals, files, agents and git.', build: () => [
+    control('appearance.sidebar.enabled', { label: 'Show the rail' }), control('appearance.sidebar.position', { label: 'Rail side' }),
+    control('appearance.sidebar.width', { label: 'Width', unit: ' cols' }),
+    head('Look'),
+    control('appearance.sidebar.row_style', { label: 'Current row marker' }), control('appearance.sidebar.header_style', { label: 'Section headers' }),
+    control('appearance.sidebar.header_case', { label: 'Header case' }), control('appearance.sidebar.density', { label: 'Spacing' }),
+    control('appearance.sidebar.show_glyphs', { label: 'Agent state glyphs' }), control('appearance.sidebar.show_counts', { label: 'Window counts' }),
+    control('appearance.sidebar.show_numbers', { label: 'Switch numbers' }), control('appearance.session_colors', { label: 'A color per session' }),
+    sectionEditor(),
+    head('Subagents', 'under each agent row'),
+    control('appearance.sidebar.subagent_rows', { label: 'Subagents show as' }), control('appearance.sidebar.subagent_collapse', { label: 'Fold heading' }),
+    control('appearance.sidebar.subagent_max_rows', { label: 'Most subagent lines', desc: '0 is no limit.' }),
+    head('Files'),
+    control('appearance.sidebar.files_style', { label: 'Files section' }), control('appearance.sidebar.file_icons', { label: 'File icons' }), control('appearance.sidebar.file_icon_colors', { label: 'Colored file icons' }) ] },
+  { id: 'keys', n: 'Keys', title: 'Keys', lede: 'Pick the keys you already know. The preview shows the which-key popup that appears after the leader.', build: () => [
+    presetCards(),
+    control('keybindings.leader_key', { label: 'Leader key', placeholder: PRESETS[get('keybindings.preset')].leader + ' (from the preset)', sugg: ['ctrl+a', 'ctrl+space', 'ctrl+s', ''] }),
+    control('keybindings.leader_twice', { label: 'Leader pressed twice' }),
+    keyList(),
+    head('Which-key popup'),
+    control('appearance.whichkey_enabled', { label: 'Show which-key' }), control('appearance.whichkey_position', { label: 'Popup corner' }),
+    control('appearance.frame_panels', { label: 'Frame panels in the border style' }),
+    control('appearance.prefix_repeat_time', { label: 'Leader stays armed after a repeat (ms)' }) ] },
+  { id: 'behave', n: 'Behavior', title: 'Behavior and agents', lede: 'Mouse, motion, agents and the screen saver. Few of these show in the preview.', build: () => [
+    head('Mouse and focus'),
+    control('appearance.focus_follows_mouse', { label: 'Focus follows mouse' }), control('appearance.click_to_type', { label: 'Click into a pane to type' }),
+    control('appearance.copy_on_select', { label: 'Copy on select' }), control('appearance.scroll_lines', { label: 'Lines per wheel notch' }),
+    control('appearance.new_window_inherit_cwd', { label: 'New window keeps the folder' }),
+    head('Motion'),
+    control('appearance.motion', { label: 'Motion' }), control('appearance.animation_speed', { label: 'Animation speed', unit: '%' }),
+    head('Agents'),
+    control('agents.enabled', { label: 'Agent features', desc: 'Agents, the Inbox, mail and approvals. Off keeps only the multiplexer.' }),
+    control('daemon.resume_agents', { label: 'Resume agents after a restart' }),
+    control('notifications.bell', { label: 'Terminal bell' }),
+    head('Screen saver'),
+    control('screensaver.enabled', { label: 'Screen saver' }), control('screensaver.effect', { label: 'Effect' }), control('screensaver.idle_minutes', { label: 'Idle minutes' }),
+    head('Safety'),
+    control('appearance.confirm_quit', { label: 'Always confirm quit' }), control('appearance.scrollback_lines', { label: 'Scrollback lines' }) ] },
+  { id: 'all', n: 'All settings', title: 'Every setting', lede: 'All ' + RAW.length + ' scalar options from tuios list-options, with the descriptions TUIOS ships.', build: allSettings },
+  { id: 'export', n: 'Export', title: 'Take it to Claude', lede: 'Your choices as a config file, a prompt for Claude, or live commands.', build: exportStep },
+];
+
+let allQuery = '', allSection = 'changed';
+function allSettings() {
+  const secs = [...new Set(RAW.map(r => r[0].split('.')[0]))];
+  const input = h('input', { type: 'search', id: 'all-q', placeholder: 'Search 250 settings', value: allQuery, on: { input: e => { allQuery = e.target.value; paint(); } } });
+  const filters = h('div', { class: 'all-filter' }, ['changed', 'all', ...secs].map(s => h('button', { type: 'button', 'aria-pressed': String(allSection === s), on: { click: () => { allSection = s; refresh(); } } }, s === 'changed' ? 'changed (' + changed().length + ')' : s)));
+  const list = h('div', {});
+  const paint = () => {
+    const q = allQuery.toLowerCase();
+    const rows = RAW.map(r => r[0]).filter(p => (allSection === 'all' || (allSection === 'changed' ? p in S : p.startsWith(allSection + '.'))) && (!q || p.includes(q) || (SCHEMA[p].desc || '').toLowerCase().includes(q)));
+    list.replaceChildren(...(rows.length ? rows.slice(0, 80).map(p => control(p, { label: p.split('.').slice(1).join('.') || p })) : [h('p', { class: 'desc' }, allSection === 'changed' ? 'Nothing changed yet. Pick "all" or a section to browse.' : 'No setting matches.')]));
+    if (rows.length > 80) list.append(h('p', { class: 'desc' }, (rows.length - 80) + ' more. Narrow the search.'));
+  };
+  paint();
+  return [input, filters, list];
+}
+
+// ---------- export ----------
+function tomlVal(v) { if (Array.isArray(v)) return '[' + v.map(x => JSON.stringify(x)).join(', ') + ']'; if (typeof v === 'string') return JSON.stringify(v); return String(v); }
+function toToml() {
+  const keys = changed(); if (!keys.length) return '# No changes yet: every setting is at its default.\n';
+  const dockTouched = keys.some(k => /^dock\.(left|center|right)$/.test(k));
+  const tables = {};
+  const add = (k, v) => { const i = k.lastIndexOf('.'); const t = k.slice(0, i), n = k.slice(i + 1); (tables[t] = tables[t] || []).push([n, v]); };
+  for (const k of keys) if (!/^dock\.(left|center|right)$/.test(k)) add(k, get(k));
+  if (dockTouched) for (const r of ['left', 'center', 'right']) add('dock.' + r, get('dock.' + r));
+  const order = Object.keys(tables).sort((a, b) => { const rank = t => ['appearance', 'appearance.sidebar', 'appearance.scrollbar', 'appearance.selection', 'dock', 'dock.clock', 'startup', 'workspaces', 'keybindings'].indexOf(t); const ra = rank(a), rb = rank(b); return (ra < 0 ? 99 : ra) - (rb < 0 ? 99 : rb) || a.localeCompare(b); });
+  let out = '# TUIOS config made with TUIOS Workbench (tuios 0.11)\n# Only keys that differ from the defaults.\n';
+  for (const t of order) { out += `\n[${t}]\n`; for (const [n, v] of tables[t]) out += `${n} = ${tomlVal(v)}\n`; }
+  return out;
+}
+const shq = v => { const s = String(v); return /^[\w.:+#@%/-]+$/.test(s) ? s : "'" + s.replace(/'/g, "'\\''") + "'"; };
+function toCommands() {
+  const keys = changed().filter(k => !EXTRA[k]);
+  const tbl = changed().filter(k => EXTRA[k]);
+  let out = '# Try the scalar settings live in a running TUIOS session:\n';
+  out += keys.length ? keys.map(k => `tuios set-config ${k} ${shq(get(k))}`).join('\n') + '\n' : '# (no scalar settings changed)\n';
+  if (get('keybindings.preset') !== 'tuios') out += `\n# Keybind preset (writes config.toml):\ntuios keybinds preset ${get('keybindings.preset')}\n`;
+  if (tbl.some(k => k.startsWith('dock.') || k === 'keybindings.leader_key' || k === 'keybindings.leader_twice')) out += '\n# The dock lists and leader settings are tables: put them in config.toml\n# (see the config.toml tab), then run:\ntuios config apply\n';
+  return out;
+}
+let withShim = false;
+function toPrompt() {
+  const toml = toToml();
+  let p = `Configure TUIOS for me (tuios 0.11.1 on macOS).
+
+1. Find my config file with \`tuios config path\` (on macOS usually ~/Library/Application Support/tuios/config.toml). If it exists, read it first and merge: keep the keys I already have, and let the values below win where they overlap. If it does not exist, create it.
+2. Write these settings into it:
+
+\`\`\`toml
+${toml.trim()}
+\`\`\`
+
+3. Run \`tuios config apply\` so the running daemon picks it up, then \`tuios keybinds doctor\` to check for key conflicts.
+4. Tell me which keys were applied, and quote any key or value tuios rejected with its error.`;
+  if (withShim) p += `
+
+5. Also make \`claude\` start under the TUIOS tmux shim inside TUIOS panes, so agent-team teammates open as TUIOS panes. Check ~/.zshrc first; if a \`claude()\` function that calls \`tuios tmux-shim\` is already there, leave it alone. Otherwise append:
+
+\`\`\`sh
+claude() {
+  if [[ -n "$TUIOS_PANE_ID" && -z "$TMUX" ]]; then
+    tuios tmux-shim -- claude "$@"
+  else
+    command claude "$@"
+  fi
+}
+\`\`\``;
+  return p;
+}
+let outTab = 'prompt';
+function exportStep() {
+  const pre = h('pre', { class: 'code', id: 'outPre', tabindex: '0' });
+  const toast = h('span', { class: 'toast', role: 'status' });
+  const content = () => outTab === 'toml' ? toToml() : outTab === 'cmd' ? toCommands() : toPrompt();
+  const paint = () => { pre.textContent = content(); };
+  const tabs = h('div', { class: 'out-tabs', role: 'group' }, [['prompt', 'Prompt for Claude'], ['toml', 'config.toml'], ['cmd', 'Live commands']].map(([k, l]) => h('button', { type: 'button', 'aria-pressed': String(outTab === k), on: { click: () => { outTab = k; refresh(); } } }, l)));
+  const copy = h('button', { class: 'btn', type: 'button', on: { click: async () => {
+    try { await navigator.clipboard.writeText(content()); toast.textContent = 'Copied. Paste it into Claude Code.'; }
+    catch (e) { const r = document.createRange(); r.selectNodeContents(pre); const s = getSelection(); s.removeAllRanges(); s.addRange(r); toast.textContent = 'Copy is blocked here. The text is selected: press ⌘C.'; } } } }, 'Copy');
+  const reset = h('button', { class: 'btn ghost', type: 'button', on: { click: () => { if (reset.dataset.arm) { S = {}; save(); refresh(); } else { reset.dataset.arm = '1'; reset.textContent = 'Click again to reset all'; } } } }, 'Reset everything');
+  const shim = h('label', { class: 'check' }, h('input', { type: 'checkbox', id: 'withShim', ...(withShim ? { checked: '' } : {}), on: { change: e => { withShim = e.target.checked; paint(); } } }),
+    h('span', {}, 'Also set up the tmux shim for Claude agent teams. ', h('span', { class: 'desc' }, 'Adds a claude() wrapper to ~/.zshrc so teammates open as TUIOS panes.')));
+  const imp = h('textarea', { id: 'importBox', placeholder: '[appearance]\ntheme = "dracula"\nborder_style = "thick"' });
+  const impMsg = h('span', { class: 'toast', role: 'status' });
+  const importer = h('details', {}, h('summary', {}, 'Start from an existing config.toml'),
+    h('p', { class: 'desc' }, 'Paste your current file (tuios config edit shows it). Known keys load into the workbench; tables it does not cover are skipped.'), imp,
+    h('div', { class: 'actions' }, h('button', { class: 'btn ghost', type: 'button', on: { click: () => { const n = importToml(imp.value); impMsg.textContent = n + ' settings loaded.'; } } }, 'Load'), impMsg));
+  paint();
+  const summary = changed().length ? h('p', { class: 'desc' }, changed().length + ' settings differ from the defaults.') : h('p', { class: 'desc' }, 'Nothing changed yet. Go back through the steps, or the output stays empty.');
+  return [summary, tabs, pre, h('div', { class: 'actions' }, copy, reset, toast), outTab === 'prompt' ? shim : null,
+    h('p', { class: 'desc', style: 'margin-top:12px' }, outTab === 'cmd' ? 'set-config changes the running daemon. Put the config.toml in place to keep the changes.' : 'Paste the prompt into Claude Code. It merges into your config instead of overwriting it.'), importer];
+}
+function importToml(src) {
+  let table = '', n = 0;
+  for (let line of src.split('\n')) {
+    line = line.replace(/\s+#.*$/, '').trim(); if (!line || line.startsWith('#')) continue;
+    const t = line.match(/^\[([^\]]+)\]$/); if (t) { table = t[1].trim(); continue; }
+    const kv = line.match(/^([\w.-]+)\s*=\s*(.+)$/); if (!kv) continue;
+    const path = (table ? table + '.' : '') + kv[1]; const s = SCHEMA[path]; if (!s) continue;
+    let raw = kv[2].trim(), v;
+    try { v = raw.startsWith('[') ? JSON.parse(raw.replace(/'/g, '"')) : raw === 'true' ? true : raw === 'false' ? false : /^-?\d+$/.test(raw) ? +raw : JSON.parse(raw.startsWith("'") ? '"' + raw.slice(1, -1).replace(/"/g, '\\"') + '"' : raw); } catch (e) { continue; }
+    if (same(v, s.def)) delete S[path]; else S[path] = v; n++;
+  }
+  save(); refresh(); return n;
+}
+
+// ---------- shell ----------
+function updatePill() { const n = changed().length; document.getElementById('changedPill').innerHTML = n ? `<b>${n}</b> changed` : 'all defaults'; }
+function refresh() {
+  const st = STEPS.find(s => s.id === step) || STEPS[0];
+  const nav = document.getElementById('steps');
+  const touched = id => { const map = { look: /theme|border_(focused|unfocused|gradient)|glyphs/, windows: /border_style|gap|shared|window_|dim_|zen|scrollbar/, layout: /startup|tiling|master|scroll_column|zoom/, dock: /^dock|dock_|show_cpu|show_ram/, rail: /sidebar|session_colors/, keys: /keybindings|whichkey|prefix_repeat|frame_panels/, behave: /focus_follows|click_to|copy_on|motion|animation|agents|daemon|notifications|screensaver|confirm/ }[id]; return map && changed().some(k => map.test(k)); };
+  nav.replaceChildren(...STEPS.map((s, i) => h('button', { type: 'button', 'aria-current': s.id === step ? 'step' : false, on: { click: () => { step = s.id; save(); refresh(); window.scrollTo({ top: 0 }); } } }, h('i', {}, String(i + 1)), s.n, touched(s.id) ? h('span', { class: 'dot', 'aria-label': 'changed' }) : null)));
+  const box = document.getElementById('controls');
+  const focusId = document.activeElement && document.activeElement.id; const sel = focusId && document.activeElement.selectionStart;
+  const idx = STEPS.indexOf(st);
+  box.replaceChildren(h('h2', {}, st.title), h('p', { class: 'lede' }, st.lede), ...st.build(),
+    h('div', { class: 'nav' }, idx ? h('button', { class: 'btn ghost', type: 'button', on: { click: () => { step = STEPS[idx - 1].id; save(); refresh(); } } }, '← ' + STEPS[idx - 1].n) : h('span'),
+      idx < STEPS.length - 1 ? h('button', { class: 'btn', type: 'button', on: { click: () => { step = STEPS[idx + 1].id; save(); refresh(); } } }, STEPS[idx + 1].n + ' →') : h('span')));
+  if (focusId) { const e = document.getElementById(focusId); if (e) { e.focus(); try { if (sel != null) e.setSelectionRange(sel, sel); } catch (x) {} } }
+  document.getElementById('paneSeg').replaceChildren(...[1, 2, 3, 4, 5, 6].map(n => h('button', { type: 'button', 'aria-pressed': String(P.panes === n), on: { click: () => { P.panes = n; save(); refresh(); } } }, String(n))));
+  document.getElementById('modeSeg').replaceChildren(...['window', 'terminal'].map(m => h('button', { type: 'button', 'aria-pressed': String(P.mode === m), on: { click: () => { P.mode = m; save(); refresh(); } } }, m)));
+  updatePill(); render();
+}
+refresh();
+setInterval(() => { if (/15:04:05|05/.test(get('dock.clock.format'))) render(); }, 1000);
+})();
+</script>
